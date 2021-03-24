@@ -154,7 +154,7 @@ namespace HidLibrary
         public async Task<HidDeviceData> ReadAsync(int timeout = 0)
         {
             var readDelegate = new ReadDelegate(Read);
-#if NET20 || NET35
+#if NET20 || NET35 || NET5_0
             return await Task<HidDeviceData>.Factory.StartNew(() => readDelegate.Invoke(timeout));
 #else
             return await Task<HidDeviceData>.Factory.FromAsync(readDelegate.BeginInvoke, readDelegate.EndInvoke, timeout, null);
@@ -178,15 +178,23 @@ namespace HidLibrary
 
         public void ReadReport(ReadReportCallback callback, int timeout)
         {
+            //System.Diagnostics.Debug.WriteLine("HidDevice: ReadReport");
             var readReportDelegate = new ReadReportDelegate(ReadReport);
             var asyncState = new HidAsyncState(readReportDelegate, callback);
+#if NET5_0
+            //Task.Factory.StartNew(() => readReportDelegate.Invoke(timeout)).ContinueWith(EndReadReport);
+            //Task.Factory.StartNew(() => EndReadReport(asyncState));
+            var ret = Task.Factory.StartNew(() => readReportDelegate.Invoke(timeout));
+            ret.ContinueWith(task => EndReadReport(asyncState, task.Result));
+#else
             readReportDelegate.BeginInvoke(timeout, EndReadReport, asyncState);
+#endif
         }
 
         public async Task<HidReport> ReadReportAsync(int timeout = 0)
         {
             var readReportDelegate = new ReadReportDelegate(ReadReport);
-#if NET20 || NET35
+#if NET20 || NET35 || NET5_0
             return await Task<HidReport>.Factory.StartNew(() => readReportDelegate.Invoke(timeout));
 #else
             return await Task<HidReport>.Factory.FromAsync(readReportDelegate.BeginInvoke, readReportDelegate.EndInvoke, timeout, null);
@@ -369,7 +377,7 @@ namespace HidLibrary
         public async Task<bool> WriteAsync(byte[] data, int timeout = 0)
         {
             var writeDelegate = new WriteDelegate(Write);
-#if NET20 || NET35
+#if NET20 || NET35 || NET5_0
             return await Task<bool>.Factory.StartNew(() => writeDelegate.Invoke(data, timeout));
 #else
             return await Task<bool>.Factory.FromAsync(writeDelegate.BeginInvoke, writeDelegate.EndInvoke, data, timeout, null);
@@ -394,8 +402,12 @@ namespace HidLibrary
         public void WriteReport(HidReport report, WriteCallback callback, int timeout)
         {
             var writeReportDelegate = new WriteReportDelegate(WriteReport);
+#if NET5_0
+            Task.Factory.StartNew(() => writeReportDelegate.Invoke(report, timeout)).ContinueWith(EndWriteReport);
+#else
             var asyncState = new HidAsyncState(writeReportDelegate, callback);
             writeReportDelegate.BeginInvoke(report, timeout, EndWriteReport, asyncState);
+#endif
         }
 
         /// <summary>
@@ -420,7 +432,7 @@ namespace HidLibrary
         public async Task<bool> WriteReportAsync(HidReport report, int timeout = 0)
         {
             var writeReportDelegate = new WriteReportDelegate(WriteReport);
-#if NET20 || NET35
+#if NET20 || NET35 || NET5_0
             return await Task<bool>.Factory.StartNew(() => writeReportDelegate.Invoke(report, timeout));
 #else
             return await Task<bool>.Factory.FromAsync(writeReportDelegate.BeginInvoke, writeReportDelegate.EndInvoke, report, timeout, null);
@@ -475,13 +487,15 @@ namespace HidLibrary
             if ((callbackDelegate != null)) callbackDelegate.Invoke(data);
         }
 
-        protected static void EndReadReport(IAsyncResult ar)
+        //protected static void EndReadReport(IAsyncResult ar)
+        protected static void EndReadReport(HidAsyncState hidAsyncState, HidReport report)
         {
-            var hidAsyncState = (HidAsyncState)ar.AsyncState;
+            //var hidAsyncState = (HidAsyncState)ar.AsyncState;
             var callerDelegate = (ReadReportDelegate)hidAsyncState.CallerDelegate;
             var callbackDelegate = (ReadReportCallback)hidAsyncState.CallbackDelegate;
-            var report = callerDelegate.EndInvoke(ar);
+            //var report = callerDelegate.EndInvoke(ar);
 
+            //System.Diagnostics.Debug.WriteLine("HidDevice: EndReport");
             if ((callbackDelegate != null)) callbackDelegate.Invoke(report);
         }
 
@@ -609,6 +623,7 @@ namespace HidLibrary
             var status = HidDeviceData.ReadStatus.NoDataRead;
             IntPtr nonManagedBuffer;
 
+            //System.Diagnostics.Debug.WriteLine("HidDevice: ReadData Start");
             if (_deviceCapabilities.InputReportByteLength > 0)
             {
                 uint bytesRead;
@@ -684,6 +699,7 @@ namespace HidLibrary
                     finally { Marshal.FreeHGlobal(nonManagedBuffer); }
                 }
             }
+            //System.Diagnostics.Debug.WriteLine("HidDevice: ReadData End");
             return new HidDeviceData(buffer, status);
         }
 

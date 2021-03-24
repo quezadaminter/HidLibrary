@@ -68,7 +68,13 @@ namespace HidLibrary
         {
             var readReportDelegate = new ReadReportDelegate(FastReadReport);
             var asyncState = new HidAsyncState(readReportDelegate, callback);
+            //readReportDelegate.BeginInvoke(timeout, EndReadReport, asyncState);
+#if NET5_0
+            var ret = Task.Factory.StartNew(() => readReportDelegate.Invoke(timeout));
+            ret.ContinueWith(task => EndReadReport(asyncState, task.Result));
+#else
             readReportDelegate.BeginInvoke(timeout, EndReadReport, asyncState);
+#endif
         }
 
         public async Task<HidReport> FastReadReportAsync(int timeout = 0)
